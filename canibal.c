@@ -67,21 +67,17 @@ int consumir(int idx){
     pthread_mutex_lock(&mutex_buffer);
     int item;
     item = buffer.v[buffer.idx--];
-    printf("%s Canibal %d consumiu o valor %d, agora temos %d numeros\n" RESET, color[idx], idx, item, buffer.idx + 1);
+    printf("%s Canibal %d consumiu agora temos %d comidas\n" RESET, color[idx], idx, buffer.idx + 1);
     pthread_mutex_unlock(&mutex_buffer);
     return item;
 }
 
 
-bool ok_consu(){    
-    return buffer.idx >= 0;
-}
-
 bool ok_prod(){
-    return buffer.idx == -1;
+    return buffer.idx < 0;
 }
 
-void *produtor(){
+void *cozinheiro(){
 
     while(1){   
         sleep(rand()%4 + prod_sleep);
@@ -94,14 +90,9 @@ void *produtor(){
         while(buffer.idx >= 1){
             printf(YELLOW "Cozinheiro indo dormir\n" RESET);
             if(!turn) swap_time();
+            pthread_cond_broadcast(&ok_to_consu);
             pthread_cond_wait(&ok_to_prod, &mutex_lock);
-            printf(YELLOW "Acordei e vou voltar a produzir\n" RESET);
-        }
-        pthread_mutex_unlock(&mutex_lock);
-
-        pthread_mutex_lock(&mutex_lock);
-        if(ok_consu()){
-            pthread_cond_signal(&ok_to_consu);
+            printf(YELLOW "Cozinheiro cordou e vou voltar a produzir\n" RESET);
         }
         pthread_mutex_unlock(&mutex_lock);
 
@@ -112,7 +103,7 @@ void *produtor(){
 
 
 
-void *consumidor(void * data){
+void *canibal(void * data){
     int id = (int)(long) data;
     while(1){
         sleep(rand()%4 + consu_sleep);
@@ -146,9 +137,9 @@ int main(){
 
     buffer.idx = -1;
     for(long i = 0; i < NUMTHRDS -1; i++)
-        pthread_create(&threads[(int)i], NULL, consumidor, (void *)i);
+        pthread_create(&threads[(int)i], NULL, canibal, (void *)i);
 
-    pthread_create(&threads[NUMTHRDS - 1], NULL, produtor, NULL);
+    pthread_create(&threads[NUMTHRDS - 1], NULL, cozinheiro, NULL);
 
     for (int i = 0; i < NUMTHRDS; i++) 
         pthread_join(threads[i], NULL);
