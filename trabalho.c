@@ -42,7 +42,7 @@ void entrar_veterano(int id){
     pthread_mutex_lock(&linf);
 
     veterano_entrar ++;
-    while(vagas == 0){
+    while(vagas == 0 || enchente == 1){
         pthread_cond_wait(&cond_veterano_entrar, &linf);
     }
     veterano_entrar --;
@@ -56,12 +56,12 @@ void entrar_veterano(int id){
 
     pthread_mutex_lock(&linf);
 
-    while(enchente){
+    while(enchente == 1){
         pthread_cond_wait(&cond_veterano_sair, &linf);
     } 
 
     if(estado_veterano[id] == 0){ // Caso o aluno estava no linf e ja foi evacuado
-        printf("ALOOOOOOOOOOOOOOU veterano %d ja tinha saido aqui\n", id);
+        //printf("ALOOOOOOOOOOOOOOU veterano %d ja tinha saido aqui\n", id);
         pthread_mutex_unlock(&linf);
         return;
     }
@@ -79,7 +79,7 @@ void entrar_calouro(int id){
     pthread_mutex_lock(&linf);
 
     calouro_entrar ++;
-    while(vagas == 0 || veterano_entrar){
+    while(vagas == 0 || veterano_entrar || enchente == 1){
         pthread_cond_wait(&cond_calouro_entrar, &linf);
     }
     calouro_entrar --;
@@ -99,7 +99,7 @@ void entrar_calouro(int id){
     } 
 
     if(estado_calouro[id] == 0){ // Caso o aluno estava no linf e ja foi evacuado
-        printf("ALOOOOOOOOOOOOOOU2222 calouro %d ja tinha saido aqui\n", id);
+        //printf("ALOOOOOOOOOOOOOOU2222 calouro %d ja tinha saido aqui\n", id);
         pthread_mutex_unlock(&linf);
         return;
     }
@@ -128,9 +128,10 @@ void * esvaziar_calouro(){
                 estado_calouro[id] = 0;
                 qnt_calouro--;
                 printf(MAGENTA "\t\t\t\t\t\t\tCalouro %d saiu CORRENDO %d calouros\n"RESET, id, qnt_calouro);
-                sleep(1);
+                
             }
             pthread_mutex_unlock(&linf);
+            sleep(1);
         }
         pthread_cond_broadcast(&cond_veterano_sair);
     }
@@ -139,9 +140,9 @@ void * esvaziar_calouro(){
 void * esvaziar_veterano(){
     while(true){
         sem_wait(&evacuar_veterano);
-        pthread_mutex_lock(&linf);
-        pthread_cond_wait(&cond_veterano_sair, &linf);
-        pthread_mutex_unlock(&linf);
+        // pthread_mutex_lock(&linf);
+        // pthread_cond_wait(&cond_veterano_sair, &linf);
+        // pthread_mutex_unlock(&linf);
 
 
         for(int id = 0; id < 30; id++){
@@ -155,9 +156,10 @@ void * esvaziar_veterano(){
                 qnt_veterano--;
                 estado_veterano[id] = 0;
                 printf(CYAN "Veterano %d saiu CORRENDO %d veteranos\n"RESET, id, qnt_veterano);
-                sleep(1);
+                
             }
             pthread_mutex_unlock(&linf);
+            sleep(1);
         }
     }
 }
@@ -169,9 +171,9 @@ void * veteranos(void * _id){
     while (true){
         sleep(rand()%10 + 1);
         pthread_mutex_lock(&linf);
-            while(enchente){
-                pthread_cond_wait(&cond_veterano_entrar, &linf);
-            } 
+        while(enchente){
+            pthread_cond_wait(&cond_veterano_entrar, &linf);
+        } 
         pthread_mutex_unlock(&linf);
         sleep(1);
         entrar_veterano(id);
@@ -183,9 +185,9 @@ void * calouros(void * _id){
     while (true){
         sleep(rand()%8 + 1);
         pthread_mutex_lock(&linf);
-            while(enchente){
-                pthread_cond_wait(&cond_calouro_entrar, &linf);
-            } 
+        while(enchente){
+            pthread_cond_wait(&cond_calouro_entrar, &linf);
+        } 
         pthread_mutex_unlock(&linf);
         sleep(1);
         entrar_calouro(id);
