@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #define RED     "\x1b[31m"
 #define GREEN   "\x1b[32m"
@@ -20,17 +21,14 @@
  
 pthread_mutex_t linf = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_veterano_entrar = PTHREAD_COND_INITIALIZER;
-pthread_cond_t cond_veterano_sair = PTHREAD_COND_INITIALIZER;
-pthread_cond_t cond_calouro_sair = PTHREAD_COND_INITIALIZER;
 pthread_cond_t cond_calouro_entrar = PTHREAD_COND_INITIALIZER;
-pthread_cond_t evacuar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t fim_evacuar = PTHREAD_COND_INITIALIZER;
 
 
 int veterano_entrar = 0, enchente = 0, espera = 9;
 int vagas = 20;
-int estado_veterano[60];
-int estado_calouro[60];
+int estado_veterano[30];
+int estado_calouro[30];
 
 void entrar_veterano(int id){
 
@@ -65,21 +63,10 @@ void entrar_veterano(int id){
     printf(RED "Veterano %d entrou no linf e ficou com %d vagas\n"RESET, id, vagas);
 
     // Tempo que o aluno fica no linf
-    sleep(rand()%4 + 5);
+    sleep(rand()%6 + 5);
 
     // Pega o lock para retirar o aluno do linf
     pthread_mutex_lock(&linf);
-
-    // Pode ser que durante seu estudo, aconteceu uma enchente, então essa função irá dormir para a thread de evacuar liberar o aluno
-    while(enchente == 1){
-        pthread_cond_wait(&fim_evacuar, &linf);
-    } 
-
-    // Se houve uma enchente, então ele já foi evacuado, logo não tem como tirar o aluno que já saiu
-    if(estado_veterano[id] == FORA ){ 
-        pthread_mutex_unlock(&linf);
-        return;
-    }
 
     // Devolve a vaga
     vagas++;
@@ -91,15 +78,27 @@ void entrar_veterano(int id){
 
     // Coloca seu estado para fora
     estado_veterano[id] = FORA;
-    // Imprime que o aluno saiu
-    printf(GREEN "Veterano %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
-    
-    // Acorda os outros alunos que estavam esperando para entrar
-    pthread_cond_broadcast(&cond_veterano_entrar); 
-    pthread_cond_broadcast(&cond_calouro_entrar); 
+   
+    if(enchente == 1){
+        printf(CYAN "Veterano %d saiu CORRENDO %d vagas\n"RESET, id, vagas);
+        // Se liberou todo mundo, avisar que acabou a evacuação
+        if(vagas == 20){
+            pthread_cond_signal(&fim_evacuar);
+            pthread_cond_broadcast(&cond_veterano_entrar); 
+            pthread_cond_broadcast(&cond_calouro_entrar); 
+        }
 
+    } else {
+        // Imprime que o aluno saiu
+        printf(GREEN "Veterano %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
+        // Acorda os outros alunos que estavam esperando para entrar
+        pthread_cond_broadcast(&cond_veterano_entrar); 
+        pthread_cond_broadcast(&cond_calouro_entrar); 
+    }
     // Libera o lock do linf
     pthread_mutex_unlock(&linf);
+    // Tempo que o aluno demorou pra sair
+    sleep(rand()%3 + 2);
 }
 
 void entrar_calouro(int id){
@@ -134,17 +133,6 @@ void entrar_calouro(int id){
     // Pega o lock do linf para o aluno sair
     pthread_mutex_lock(&linf);
 
-    // Pode ser que durante seu estudo, aconteceu uma enchente, então essa função irá dormir para a thread de evacuar liberar o aluno
-    while(enchente == 1){
-        pthread_cond_wait(&fim_evacuar, &linf);
-    } 
-
-    // Se houve uma enchente, então ele já foi evacuado, logo não tem como tirar o aluno que já saiu
-    if(estado_calouro[id] == 0){ 
-        pthread_mutex_unlock(&linf);
-        return;
-    }
-
     // Libera a vaga
     vagas++;
     // Seta o estado para fora, pois ele saiu
@@ -155,84 +143,28 @@ void entrar_calouro(int id){
         espera = 9;
     }
 
-    // Imprime que o aluno foi embora
-    printf(BLUE "\t\t\t\t\t\t\tCalouro %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
+    if(enchente == 1){
+        printf(MAGENTA "\t\t\t\t\t\t\tCalouro %d saiu CORRENDO %d vagas\n"RESET, id, vagas);
+        // Se liberou todo mundo, avisar que acabou a evacuação
+        if(vagas == 20){
+            pthread_cond_signal(&fim_evacuar);
+            pthread_cond_broadcast(&cond_veterano_entrar); 
+            pthread_cond_broadcast(&cond_calouro_entrar); 
+        }
+    } else{
+        // Imprime que o aluno foi embora
+        printf(BLUE "\t\t\t\t\t\t\tCalouro %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
 
-    // Acorda os outros alunos que queriam entrar
-    pthread_cond_broadcast(&cond_veterano_entrar); 
-    pthread_cond_broadcast(&cond_calouro_entrar); 
+        // Acorda os outros alunos que queriam entrar
+        pthread_cond_broadcast(&cond_veterano_entrar); 
+        pthread_cond_broadcast(&cond_calouro_entrar); 
+    }
+
 
     // Libera o lock do linf
     pthread_mutex_unlock(&linf);
-}
-
-void * esvaziar_calouro(void * _id){
-
-    // Pega o id da thread 
-    int id = (int)(long)_id;
-
-    // Fica em um laço pois ele evacua o aluno toda vez que tiver uma enchente
-    while(true){
-        sleep(rand()%3 + 2);
-        pthread_mutex_lock(&linf);
-
-        // Thread dorme esperando o sinal para evacuar
-        pthread_cond_wait(&evacuar, &linf);
-
-        // Se o calouro não estava no linf, então ele nao precisa evacuar
-        if(estado_calouro[id] == FORA){
-            pthread_mutex_unlock(&linf);
-            continue;    
-        }
-
-        // Livera a vaga
-        vagas++;
-        // Marca que o calouro saiu
-        estado_calouro[id] = 0;
-        // Imprime que o aluno saiu correndo do linf
-        printf(MAGENTA "\t\t\t\t\t\t\tCalouro %d saiu CORRENDO %d vagas\n"RESET, id, vagas);
-        // Tempo que o aluno demorou pra sair
-        sleep(1);
-        // Se liberou todo mundo, avisar que acabou a evacuação
-        if(vagas == 20){
-            pthread_cond_signal(&fim_evacuar);
-        }
-
-        pthread_mutex_unlock(&linf);
-    }
-}
-
-void * esvaziar_veterano(void * _id){
-    int id = (int)(long)_id;
-    // Fica em um laço pois ele evacua o aluno toda vez que tiver uma enchente
-    while(true){
-        sleep(rand()%3 + 2);
-        pthread_mutex_lock(&linf);
-
-        // Thread dorme esperando o sinal para evacuar
-        pthread_cond_wait(&evacuar, &linf);
-
-        // Se o veterano não estava no linf, então ele nao precisa evacuar
-        if(estado_veterano[id] == FORA){
-            pthread_mutex_unlock(&linf);
-            continue;    
-        }
-        // Libera a vaga
-        vagas++;
-        // Marca que o aluno saiu
-        estado_veterano[id] = FORA;
-        // Imprime que o aluno saiu correndo
-        printf(CYAN "Veterano %d saiu CORRENDO %d vagas\n"RESET, id, vagas);
-        // Tempo que o aluno demorou pra correr
-        sleep(1);
-        // Se liberou todo mundo, avisar que acabou a evacuação
-        if(vagas == 20){
-            pthread_cond_signal(&fim_evacuar);
-        }
-
-        pthread_mutex_unlock(&linf);
-       
-    }
+    // Tempo que o aluno demorou pra sair
+    sleep(rand()%3 + 2);
 }
 
 
@@ -255,13 +187,11 @@ void * calouros(void * _id){
 void * alagar(){
     while(true){
         // Período que demora para acontecer uma enchente
-        sleep(rand()%10 + 10);
+        sleep(rand()%10 + 7);
         // Locka o linf
         pthread_mutex_lock(&linf);
-
         // Marca que está tendo uma enchente
         enchente = 1;
-
         // Imprime na tela
         printf(RED"\t\t\t\t _______ .__   __.   ______  __    __   _______ .__   __. .___________._______  __   __   __                         __\n");
         printf("\t\t\t\t|   ____||  \\ |  |  /      ||  |  |  | |   ____||  \\ |  | |           |   ____||  | |  | |  |                       /' )\n"); 
@@ -274,10 +204,7 @@ void * alagar(){
         printf("\t\t\t\t                                                                                                     `^^^^^'-------.....`-.___.'----... .'         `.;\n");
         printf("\t\t\t\t                                                                                                                                       `-`           `   \n"RESET);                                                                                          
         
-        // Acorda as threads para evacuar os alunos
-        pthread_cond_broadcast(&evacuar);
-
-        // Volta a dormir até terminar de evacuar
+        // Começa a dormir até terminar de evacuar
         pthread_cond_wait(&fim_evacuar, &linf);
         
         // Marca que acabou a enchente
@@ -306,7 +233,8 @@ void * alagar(){
 
 int main(){ 
 
-    pthread_t threads[63];
+    pthread_t threads[31];
+
 
     memset(estado_veterano, 0, sizeof(estado_veterano));
     memset(estado_calouro, 0, sizeof(estado_calouro));
@@ -314,17 +242,9 @@ int main(){
     for(int i = 0; i < 15; i++)
         pthread_create(&threads[i], NULL, veteranos, (void * )(long)i);
     for(int i = 15; i < 30; i++)
-        pthread_create(&threads[i], NULL, esvaziar_veterano, (void * )(long)i-15);
-    for(int i = 30; i < 45; i++)
         pthread_create(&threads[i], NULL, calouros, (void * )(long)i);
-    for(int i = 45; i < 60; i++)
-        pthread_create(&threads[i], NULL, esvaziar_calouro, (void * )(long)i-15);
-    
-    pthread_create(&threads[60], NULL, alagar, NULL);
-    pthread_create(&threads[61], NULL, esvaziar_calouro, NULL);
-    pthread_create(&threads[62], NULL, esvaziar_veterano, NULL);
-
-    for(int i = 0; i < 63; i++)
+    pthread_create(&threads[30], NULL, alagar, NULL);
+    for(int i = 0; i < 31; i++)
         pthread_join(threads[i], NULL); 
 
     return 0;
