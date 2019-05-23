@@ -2,11 +2,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <time.h>
+#include <sys/time.h>
 #include <string.h>
 #include <stdbool.h>
 #include <semaphore.h>
-#include <signal.h>
 
 #define RED     "\x1b[31m"
 #define GREEN   "\x1b[32m"
@@ -22,6 +21,7 @@
 pthread_mutex_t linf = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_veterano_entrar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t cond_calouro_entrar = PTHREAD_COND_INITIALIZER;
+pthread_cond_t fim_estudo = PTHREAD_COND_INITIALIZER;
 pthread_cond_t fim_evacuar = PTHREAD_COND_INITIALIZER;
 
 
@@ -30,7 +30,7 @@ int vagas = 20;
 int estado_veterano[30];
 int estado_calouro[30];
 
-void entrar_veterano(int id){
+void entrar_veterano(int id, struct timespec tempo_estudando){
 
     // Pega o lock do linf
     pthread_mutex_lock(&linf);
@@ -55,18 +55,25 @@ void entrar_veterano(int id){
     if(vagas == 0){
         espera = 15;
     }
-
-    // Libera o lock do linf
-    pthread_mutex_unlock(&linf);
-
     // Imprime que o aluno entrou
     printf(RED "Veterano %d entrou no linf e ficou com %d vagas\n"RESET, id, vagas);
 
-    // Tempo que o aluno fica no linf
-    sleep(rand()%6 + 5);
+/*
+    // Libera o lock do linf
+    pthread_mutex_unlock(&linf);
+*/
 
+    // Tempo que o aluno fica no linf
+    //sleep(rand()%6 + 5);
+    long qnt = (rand()%6 + 5);
+    tempo_estudando.tv_sec += qnt;
+    printf("ESPERA = %ld qnt = %ld\n", tempo_estudando.tv_sec, qnt);
+    pthread_cond_timedwait(&fim_estudo, &linf, &tempo_estudando);
+/*
     // Pega o lock para retirar o aluno do linf
     pthread_mutex_lock(&linf);
+*/
+
 
     // Devolve a vaga
     vagas++;
@@ -101,7 +108,7 @@ void entrar_veterano(int id){
     sleep(rand()%3 + 2);
 }
 
-void entrar_calouro(int id){
+void entrar_calouro(int id, struct timespec tempo_estudando){
 
     // Pega o lock do linf
     pthread_mutex_lock(&linf);
@@ -121,17 +128,23 @@ void entrar_calouro(int id){
     if(vagas == 0){
         espera = 15;
     }
-    
+
+ /*   
     // Libera o lock do linf
     pthread_mutex_unlock(&linf);
-
+*/
     // Imprime que o calouro entrou no linf
     printf(YELLOW "\t\t\t\t\t\t\tCalouro %d entrou no linf e ficou com %d vagas\n"RESET, id, vagas);
     // Tempo que o calouro fica no linf
-    sleep(rand()%4 + 3);
-
+    //sleep(rand()%4 + 3);
+    long qnt = (rand()%6 + 5);
+    tempo_estudando.tv_sec += qnt;
+    printf("\t\t\t\t\t\t\tESPERA = %ld qnt = %ld\n", tempo_estudando.tv_sec, qnt);
+    pthread_cond_timedwait(&fim_estudo, &linf, &tempo_estudando);
+/*
     // Pega o lock do linf para o aluno sair
     pthread_mutex_lock(&linf);
+*/
 
     // Libera a vaga
     vagas++;
@@ -170,17 +183,25 @@ void entrar_calouro(int id){
 
 void * veteranos(void * _id){
     int id = (int)(long)_id;
+    struct timespec   tempo_estudando;
+    struct timeval    tp;
+    tempo_estudando.tv_sec  = tp.tv_sec;
+    tempo_estudando.tv_nsec = tp.tv_usec * 1000;
     while (true){
         sleep(rand()%espera + 1);
-        entrar_veterano(id);
+        entrar_veterano(id, tempo_estudando);
     }
 }
 
 void * calouros(void * _id){
     int id = (int)(long)_id;
+    struct timespec   tempo_estudando;
+    struct timeval    tp;
+    tempo_estudando.tv_sec  = tp.tv_sec;
+    tempo_estudando.tv_nsec = tp.tv_usec * 1000;
     while (true){
         sleep(rand()%espera + 1);
-        entrar_calouro(id);
+        entrar_calouro(id, tempo_estudando);
     }
 }
 
@@ -204,8 +225,14 @@ void * alagar(){
         printf("\t\t\t\t                                                                                                     `^^^^^'-------.....`-.___.'----... .'         `.;\n");
         printf("\t\t\t\t                                                                                                                                       `-`           `   \n"RESET);                                                                                          
         
-        // Começa a dormir até terminar de evacuar
-        pthread_cond_wait(&fim_evacuar, &linf);
+        pthread_cond_broadcast(&fim_estudo);
+
+        if(vagas == 20){
+            printf("LINF JA TAVA VAZIOOOOOOOO!!!!!\n");
+        } else {
+            // Começa a dormir até terminar de evacuar
+            pthread_cond_wait(&fim_evacuar, &linf);
+        }
         
         // Marca que acabou a enchente
         enchente = 0;
