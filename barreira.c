@@ -30,9 +30,9 @@ int soma_da_linha[10];
 int qnt = 0;
 
 void * soma_linha(void * _id){
-    printf(YELLOW"Somando linha %d\n", _id);
 
     int id = (int)(long)_id;
+    printf(YELLOW"Somando linha %d\n", id);
     int i,j;
     soma_da_linha[id] = 0;
     for(j = 0; j < 200; j ++){
