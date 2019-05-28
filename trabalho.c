@@ -27,10 +27,20 @@ pthread_cond_t fim_evacuar = PTHREAD_COND_INITIALIZER;
 
 int veterano_entrar = 0, enchente = 0, espera = 9;
 int vagas = 20;
-int estado_veterano[30];
-int estado_calouro[30];
 
-void entrar_veterano(int id, struct timespec tempo_estudando){
+
+struct timespec cond_set_time(int qnt){
+    struct timespec   ts;
+    struct timeval    tp;
+    gettimeofday(&tp,NULL); 
+    ts.tv_sec  = tp.tv_sec;
+    ts.tv_nsec = tp.tv_usec * 1000;
+    ts.tv_sec += qnt;
+    return ts;
+}
+
+
+void entrar_veterano(int id){
 
     // Pega o lock do linf
     pthread_mutex_lock(&linf);
@@ -46,8 +56,6 @@ void entrar_veterano(int id, struct timespec tempo_estudando){
 
     // Aluno não quer mais entrar, pois já entrou
     veterano_entrar --;
-    // Macar que o aluno está dentro do linf
-    estado_veterano[id] = DENTRO;
     // COnsumiu a vaga
     vagas--;
 
@@ -58,22 +66,10 @@ void entrar_veterano(int id, struct timespec tempo_estudando){
     // Imprime que o aluno entrou
     printf(RED "Veterano %d entrou no linf e ficou com %d vagas\n"RESET, id, vagas);
 
-/*
-    // Libera o lock do linf
-    pthread_mutex_unlock(&linf);
-*/
 
     // Tempo que o aluno fica no linf
-    //sleep(rand()%6 + 5);
-    long qnt = (rand()%6 + 5);
-    tempo_estudando.tv_sec += qnt;
-    printf("ESPERA = %ld qnt = %ld\n", tempo_estudando.tv_sec, qnt);
+    struct timespec tempo_estudando = cond_set_time(rand()%6 + 5);
     pthread_cond_timedwait(&fim_estudo, &linf, &tempo_estudando);
-/*
-    // Pega o lock para retirar o aluno do linf
-    pthread_mutex_lock(&linf);
-*/
-
 
     // Devolve a vaga
     vagas++;
@@ -83,9 +79,6 @@ void entrar_veterano(int id, struct timespec tempo_estudando){
         espera = 9;
     }
 
-    // Coloca seu estado para fora
-    estado_veterano[id] = FORA;
-   
     if(enchente == 1){
         printf(CYAN "Veterano %d saiu CORRENDO %d vagas\n"RESET, id, vagas);
         // Se liberou todo mundo, avisar que acabou a evacuação
@@ -102,13 +95,13 @@ void entrar_veterano(int id, struct timespec tempo_estudando){
         pthread_cond_broadcast(&cond_veterano_entrar); 
         pthread_cond_broadcast(&cond_calouro_entrar); 
     }
+    // Tempo que o aluno demorou pra sair
+    sleep(1);
     // Libera o lock do linf
     pthread_mutex_unlock(&linf);
-    // Tempo que o aluno demorou pra sair
-    sleep(rand()%3 + 2);
 }
 
-void entrar_calouro(int id, struct timespec tempo_estudando){
+void entrar_calouro(int id){
 
     // Pega o lock do linf
     pthread_mutex_lock(&linf);
@@ -119,8 +112,6 @@ void entrar_calouro(int id, struct timespec tempo_estudando){
         pthread_cond_wait(&cond_calouro_entrar, &linf);
     }
 
-    // Marca que o calouro entrou
-    estado_calouro[id] = DENTRO;
     // Consome a vaga
     vagas--;
 
@@ -128,29 +119,15 @@ void entrar_calouro(int id, struct timespec tempo_estudando){
     if(vagas == 0){
         espera = 15;
     }
-
- /*   
-    // Libera o lock do linf
-    pthread_mutex_unlock(&linf);
-*/
     // Imprime que o calouro entrou no linf
     printf(YELLOW "\t\t\t\t\t\t\tCalouro %d entrou no linf e ficou com %d vagas\n"RESET, id, vagas);
+
     // Tempo que o calouro fica no linf
-    //sleep(rand()%4 + 3);
-    long qnt = (rand()%6 + 5);
-    tempo_estudando.tv_sec += qnt;
-    printf("\t\t\t\t\t\t\tESPERA = %ld qnt = %ld\n", tempo_estudando.tv_sec, qnt);
+    struct timespec tempo_estudando = cond_set_time(rand()%6 + 5);
     pthread_cond_timedwait(&fim_estudo, &linf, &tempo_estudando);
-/*
-    // Pega o lock do linf para o aluno sair
-    pthread_mutex_lock(&linf);
-*/
 
     // Libera a vaga
     vagas++;
-    // Seta o estado para fora, pois ele saiu
-    estado_calouro[id] = FORA;
-
     // Faz que o tempo de espera dos alunos seja menor para ocupar as vagas mais rápido
     if(vagas == 20){
         espera = 9;
@@ -174,34 +151,26 @@ void entrar_calouro(int id, struct timespec tempo_estudando){
     }
 
 
+    // Tempo que o aluno demorou pra sair
+    sleep(1);
     // Libera o lock do linf
     pthread_mutex_unlock(&linf);
-    // Tempo que o aluno demorou pra sair
-    sleep(rand()%3 + 2);
 }
 
 
 void * veteranos(void * _id){
     int id = (int)(long)_id;
-    struct timespec   tempo_estudando;
-    struct timeval    tp;
-    tempo_estudando.tv_sec  = tp.tv_sec;
-    tempo_estudando.tv_nsec = tp.tv_usec * 1000;
     while (true){
         sleep(rand()%espera + 1);
-        entrar_veterano(id, tempo_estudando);
+        entrar_veterano(id);
     }
 }
 
 void * calouros(void * _id){
     int id = (int)(long)_id;
-    struct timespec   tempo_estudando;
-    struct timeval    tp;
-    tempo_estudando.tv_sec  = tp.tv_sec;
-    tempo_estudando.tv_nsec = tp.tv_usec * 1000;
     while (true){
         sleep(rand()%espera + 1);
-        entrar_calouro(id, tempo_estudando);
+        entrar_calouro(id);
     }
 }
 
@@ -262,15 +231,14 @@ int main(){
 
     pthread_t threads[31];
 
-
-    memset(estado_veterano, 0, sizeof(estado_veterano));
-    memset(estado_calouro, 0, sizeof(estado_calouro));
-
     for(int i = 0; i < 15; i++)
         pthread_create(&threads[i], NULL, veteranos, (void * )(long)i);
+
     for(int i = 15; i < 30; i++)
         pthread_create(&threads[i], NULL, calouros, (void * )(long)i);
+
     pthread_create(&threads[30], NULL, alagar, NULL);
+
     for(int i = 0; i < 31; i++)
         pthread_join(threads[i], NULL); 
 
