@@ -92,8 +92,10 @@ void entrar_veterano(int id){
         // Imprime que o aluno saiu
         printf(GREEN "Veterano %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
         // Acorda os outros alunos que estavam esperando para entrar
-        pthread_cond_broadcast(&cond_veterano_entrar); 
-        pthread_cond_broadcast(&cond_calouro_entrar); 
+        if(vagas == 1){
+            pthread_cond_broadcast(&cond_veterano_entrar); 
+            pthread_cond_broadcast(&cond_calouro_entrar); 
+        }
     }
     // Tempo que o aluno demorou pra sair
     sleep(1);
@@ -146,8 +148,10 @@ void entrar_calouro(int id){
         printf(BLUE "\t\t\t\t\t\t\tCalouro %d saiu do linf e ficou com %d vagas\n"RESET, id, vagas);
 
         // Acorda os outros alunos que queriam entrar
-        pthread_cond_broadcast(&cond_veterano_entrar); 
-        pthread_cond_broadcast(&cond_calouro_entrar); 
+        if(vagas == 1){
+            pthread_cond_broadcast(&cond_veterano_entrar); 
+            pthread_cond_broadcast(&cond_calouro_entrar); 
+        }
     }
 
 
