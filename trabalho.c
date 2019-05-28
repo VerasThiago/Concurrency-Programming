@@ -84,8 +84,6 @@ void entrar_veterano(int id){
         // Se liberou todo mundo, avisar que acabou a evacuação
         if(vagas == 20){
             pthread_cond_signal(&fim_evacuar);
-            pthread_cond_broadcast(&cond_veterano_entrar); 
-            pthread_cond_broadcast(&cond_calouro_entrar); 
         }
 
     } else {
@@ -140,8 +138,6 @@ void entrar_calouro(int id){
         // Se liberou todo mundo, avisar que acabou a evacuação
         if(vagas == 20){
             pthread_cond_signal(&fim_evacuar);
-            pthread_cond_broadcast(&cond_veterano_entrar); 
-            pthread_cond_broadcast(&cond_calouro_entrar); 
         }
     } else{
         // Imprime que o aluno foi embora
@@ -198,11 +194,12 @@ void * alagar(){
         printf("\t\t\t\t                                                                                                     `^^^^^'-------.....`-.___.'----... .'         `.;\n");
         printf("\t\t\t\t                                                                                                                                       `-`           `   \n"RESET);                                                                                          
         
-        pthread_cond_broadcast(&fim_estudo);
 
         if(vagas == 20){
             printf("LINF JA TAVA VAZIOOOOOOOO!!!!!\n");
         } else {
+            // Acorda os alunos para evacuar
+            pthread_cond_broadcast(&fim_estudo);
             // Começa a dormir até terminar de evacuar
             pthread_cond_wait(&fim_evacuar, &linf);
         }
@@ -221,9 +218,10 @@ void * alagar(){
         // Tempo que os alunos ficam com medo para voltar no linf
         sleep(rand()%3 + 3);
 
-        // Acorda as threads para voltarem a entrar no linf
-        pthread_cond_broadcast(&cond_veterano_entrar);
-        pthread_cond_broadcast(&cond_calouro_entrar);
+        // Fazer os alunos voltarem a entrar no linf
+        pthread_cond_broadcast(&cond_veterano_entrar); 
+        pthread_cond_broadcast(&cond_calouro_entrar); 
+
 
         pthread_mutex_unlock(&linf);
     }
